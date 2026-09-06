@@ -1,18 +1,16 @@
 import { Controller, Get } from '@nestjs/common';
+import { HealthService } from './health/health.service';
 
 @Controller({
   path: 'health',
   version: '1',
 })
 export class HealthController {
+  constructor(private readonly healthService: HealthService){}
+  
   @Get()
   checkHealth() {
-    return {
-      status: 'ok',
-      service: 'WebhookOps-api',
-      version: '1.0.0',
-      uptime: Math.floor(process.uptime()),
-      timestamp: new Date().toISOString(),
-    };
+    return this.healthService.checkHealth()
+    
   }
 }
