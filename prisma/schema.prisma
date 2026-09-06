@@ -1,0 +1,99 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum WebhookEventStatus {
+  RECEIVED
+  QUEUED
+  PROCESSING
+  DELIVERED
+  FAILED
+}
+
+enum DeliveryAttemptStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique @db.VarChar(320)
+  name         String?   @db.VarChar(100)
+  passwordHash String
+  projects     Project[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Project {
+  id        String            @id @default(cuid())
+  name      String            @db.VarChar(100)
+  slug      String            @db.VarChar(100)
+  ownerId   String
+  owner     User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  endpoints WebhookEndpoint[]
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@unique([ownerId, slug])
+  @@index([ownerId])
+}
+
+model WebhookEndpoint {
+  id             String         @id @default(cuid())
+  name           String         @db.VarChar(100)
+  endpointKey    String         @unique @db.VarChar(64)
+  destinationUrl String         @db.Text
+  signingSecret  String?        @db.VarChar(255)
+  isActive       Boolean        @default(true)
+  projectId      String
+  project        Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  events         WebhookEvent[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([projectId])
+}
+
+model WebhookEvent {
+  id          String             @id @default(cuid())
+  method      String             @db.VarChar(10)
+  headers     Json
+  payload     Json?
+  rawBody     String             @db.Text
+  sourceIp    String?            @db.VarChar(64)
+  status      WebhookEventStatus @default(RECEIVED)
+  endpointId  String
+  endpoint    WebhookEndpoint    @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  attempts    DeliveryAttempt[]
+  receivedAt  DateTime           @default(now())
+  deliveredAt DateTime?
+
+  @@index([endpointId, receivedAt])
+  @@index([status, receivedAt])
+}
+
+model DeliveryAttempt {
+  id              String                @id @default(cuid())
+  attemptNumber   Int
+  status          DeliveryAttemptStatus @default(PENDING)
+  responseStatus  Int?
+  responseHeaders Json?
+  responseBody    String?               @db.Text
+  errorMessage    String?               @db.Text
+  durationMs      Int?
+  eventId         String
+  event           WebhookEvent          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  startedAt       DateTime              @default(now())
+  completedAt     DateTime?
+
+  @@unique([eventId, attemptNumber])
+  @@index([eventId])
+}
